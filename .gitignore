@@ -1,4 +1,6 @@
 node_modules/
 dist/
 
-*.env*
+# Normally we don't have this files inside Git but we keep them for demo purposes
+# *.db*
+# *.env*
