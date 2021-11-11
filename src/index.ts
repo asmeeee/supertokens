@@ -26,16 +26,66 @@ app.get("/api/entity/:id/update-number", async (req, res) => {
     );
 
     const existingEntity = await prisma.entity.findUnique({
-      select: { number: true },
-      where: { id: Number(id) },
+      select: {
+        number: true,
+      },
+
+      where: {
+        id: Number(id),
+      },
     });
 
-    const newEntity = await prisma.entity.upsert({
-      select: { id: true, number: true },
-      where: { id: Number(id) },
-      update: { number: (existingEntity?.number || 0) + Number(randomNumber) },
-      create: { number: 1 },
-    });
+    let newEntity;
+
+    if (!existingEntity) {
+      newEntity = await prisma.entity.create({
+        select: {
+          id: true,
+          number: true,
+        },
+
+        data: {
+          number: 1,
+        },
+      });
+    } else {
+      // Set up a random delay up to 5s to simulate a slow server
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.floor(Math.random() * 5000))
+      );
+
+      const updatedEntities = await prisma.entity.updateMany({
+        where: {
+          id: Number(id),
+          
+          // This condition ensures we are updating the entity
+          // that has the same number as the one we requested
+          // and was not updated by another request in the meantime
+          number: existingEntity.number,
+        },
+
+        data: {
+          number: existingEntity.number + Number(randomNumber),
+        },
+      });
+
+      if (updatedEntities.count === 0) {
+        res
+          .status(304)
+          .json("This entity has been already updated. Please try again!");
+      }
+
+      newEntity = await prisma.entity.findUnique({
+        select: {
+          id: true,
+          number: true,
+        },
+
+        where: {
+          id: Number(id),
+        },
+      });
+    }
 
     res.json(newEntity);
   } catch (error) {

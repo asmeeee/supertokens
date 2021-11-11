@@ -34,21 +34,38 @@ it("GET /api/generate-random-number generates a number less than 50", async () =
 it("GET /api/entity/:id/update-number should create a new entry", async () => {
   const id = 1;
 
-  const existingEntity = await prisma.entity.findFirst({ where: { id } });
+  const existingEntity = await prisma.entity.findFirst({
+    where: {
+      id,
+    },
+  });
 
   expect(existingEntity).toBeNull();
 
   const res = await requestWithSupertest.get(`/api/entity/${id}/update-number`);
 
   const createdEntity = await prisma.entity.findFirst({
-    select: { id: true, number: true },
-    where: { id },
+    select: {
+      id: true,
+      number: true,
+    },
+
+    where: {
+      id,
+    },
   });
 
-  expect(createdEntity).toMatchObject({ id: 1, number: 1 });
+  expect(createdEntity).toMatchObject({
+    id: 1,
+    number: 1,
+  });
 
   expect(res.statusCode).toEqual(200);
-  expect(res.body).toMatchObject({ id: 1, number: 1 });
+
+  expect(res.body).toMatchObject({
+    id: 1,
+    number: 1,
+  });
 });
 
 it("GET /api/entity/:id/update-number should update an existing entry", async () => {
@@ -56,17 +73,29 @@ it("GET /api/entity/:id/update-number should update an existing entry", async ()
   const number = 1;
 
   await prisma.entity.create({
-    data: { id, number },
+    data: {
+      id,
+      number,
+    },
   });
 
   const res = await requestWithSupertest.get(`/api/entity/${id}/update-number`);
 
-  const updatedEntity = await prisma.entity.findFirst({ where: { id } });
+  const updatedEntity = await prisma.entity.findFirst({
+    where: {
+      id,
+    },
+  });
 
   expect(updatedEntity?.number).toBeGreaterThan(number);
 
   expect(res.statusCode).toEqual(200);
-  expect(res.body).toMatchObject({ id, number: updatedEntity?.number });
+
+  expect(res.body).toMatchObject({
+    id,
+
+    number: updatedEntity?.number,
+  });
 });
 
 it("runs a cron clean-up task to delete some records every 30 seconds", async () => {
@@ -74,7 +103,9 @@ it("runs a cron clean-up task to delete some records every 30 seconds", async ()
   await Promise.all(
     [5, 8, 10, 72, 73, 78].map(async (number) => {
       await prisma.entity.create({
-        data: { number },
+        data: {
+          number,
+        },
       });
     })
   );
@@ -94,4 +125,35 @@ it("runs a cron clean-up task to delete some records every 30 seconds", async ()
   expect(foundEntities[0].number).toEqual(5);
   expect(foundEntities[1].number).toEqual(8);
   expect(foundEntities[2].number).toEqual(73);
-}, 60000);
+}, 75000);
+
+it("runs a couple of requests for the same entity and expects only one to work at a time", async () => {
+  const id = 1;
+  const number = 1;
+
+  await prisma.entity.create({
+    data: {
+      id,
+      number,
+    },
+  });
+
+  const responses = await Promise.all([
+    requestWithSupertest.get(`/api/entity/${id}/update-number`),
+    requestWithSupertest.get(`/api/entity/${id}/update-number`),
+  ]);
+
+  let has304 = false;
+
+  responses.every((response) => {
+    if (response.statusCode === 304) {
+      has304 = true;
+
+      return false;
+    }
+
+    return true;
+  });
+
+  expect(has304).toEqual(true);
+}, 10000);
